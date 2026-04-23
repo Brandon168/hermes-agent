@@ -4491,7 +4491,7 @@ class AIAgent:
         _validate_proxy_env_urls()
         _validate_base_url(client_kwargs.get("base_url"))
         if self.provider == "copilot-acp" or str(client_kwargs.get("base_url", "")).startswith("acp://copilot"):
-            from agent.copilot_acp_client import CopilotACPClient
+            from acp_adapter.copilot_client import CopilotACPClient
 
             client = CopilotACPClient(**client_kwargs)
             logger.info(
@@ -6948,7 +6948,39 @@ class AIAgent:
         # ── chat_completions (default) ─────────────────────────────────────
         _ct = self._get_transport()
 
-        # Provider detection flags
+        # ── Provider profile path ────────────────────────────────────────
+        # Activated incrementally per provider as parity is verified.
+        # Each provider here has 73+ parity tests proving identical output.
+        _PROFILE_ACTIVE_PROVIDERS = frozenset({
+            "nvidia", "nvidia-nim",
+            "deepseek", "deepseek-chat",
+        })
+        if self.provider in _PROFILE_ACTIVE_PROVIDERS:
+            try:
+                from providers import get_provider_profile
+                _profile = get_provider_profile(self.provider)
+            except Exception:
+                _profile = None
+            if _profile:
+                _ephemeral_out = getattr(self, "_ephemeral_max_output_tokens", None)
+                if _ephemeral_out is not None:
+                    self._ephemeral_max_output_tokens = None
+                return _ct.build_kwargs(
+                    model=self.model,
+                    messages=api_messages,
+                    tools=self.tools,
+                    timeout=self._resolved_api_call_timeout(),
+                    max_tokens=self.max_tokens,
+                    ephemeral_max_output_tokens=_ephemeral_out,
+                    max_tokens_param_fn=self._max_tokens_param,
+                    reasoning_config=self.reasoning_config,
+                    request_overrides=self.request_overrides,
+                    session_id=getattr(self, "session_id", None),
+                    provider_profile=_profile,
+                    ollama_num_ctx=self._ollama_num_ctx,
+                )
+
+        # ── Legacy flag path (providers without active profiles) ─────────
         _is_qwen = self._is_qwen_portal()
         _is_or = self._is_openrouter_url()
         _is_gh = (
