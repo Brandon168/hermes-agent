@@ -275,6 +275,46 @@ def _custom_provider_runtime_ids(value: Any) -> set[str]:
     return {normalized, f"custom:{normalized}"}
 
 
+_DIRECT_AGENT_API_MODES = {
+    "chat_completions",
+    "codex_responses",
+    "anthropic_messages",
+    "bedrock_converse",
+    "vercel_ai_gateway",
+    "codex_app_server",
+}
+
+
+def _configured_custom_provider_api_mode(provider: Any) -> Optional[str]:
+    """Resolve a named custom provider's transport for direct Agent callers.
+
+    The CLI resolves this before constructing :class:`AIAgent`, but WebUI and
+    other in-process callers pass the named provider and connection directly.
+    They must not silently fall back to ``chat_completions`` when that provider
+    explicitly declares another transport.
+    """
+    requested_ids = _custom_provider_runtime_ids(provider)
+    if not requested_ids:
+        return None
+    try:
+        from hermes_cli.config import get_compatible_custom_providers, load_config
+
+        entries = get_compatible_custom_providers(load_config())
+    except Exception:
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_ids: set[str] = set()
+        for key in ("provider_key", "id", "name"):
+            entry_ids.update(_custom_provider_runtime_ids(entry.get(key)))
+        if requested_ids.isdisjoint(entry_ids):
+            continue
+        mode = str(entry.get("api_mode") or entry.get("transport") or "").strip()
+        return mode if mode in _DIRECT_AGENT_API_MODES else None
+    return None
+
+
 def _build_codex_gpt5_autoraise_notice(
     autoraise: Dict[str, Any], context_length: Optional[int] = None
 ) -> str:
@@ -669,8 +709,15 @@ def init_agent(
     agent._credential_pool = credential_pool
     agent.acp_command = acp_command or command
     agent.acp_args = list(acp_args or args or [])
-    if api_mode in {"chat_completions", "codex_responses", "anthropic_messages", "bedrock_converse", "vercel_ai_gateway", "codex_app_server"}:
+    configured_provider_api_mode = (
+        _configured_custom_provider_api_mode(agent.provider)
+        if api_mode is None
+        else None
+    )
+    if api_mode in _DIRECT_AGENT_API_MODES:
         agent.api_mode = api_mode
+    elif configured_provider_api_mode is not None:
+        agent.api_mode = configured_provider_api_mode
     elif agent.provider == "openai-codex":
         agent.api_mode = "codex_responses"
     elif agent.provider in {"xai", "xai-oauth"}:

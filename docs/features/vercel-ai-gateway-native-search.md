@@ -70,10 +70,13 @@ The exact SDK oracle and regeneration procedure live in
 
 ## WebUI
 
-WebUI uses the same Gateway runtime and model resolver as the CLI. No WebUI
-patch or second service is required. Streaming v4 SSE events are projected into
-Hermes' existing stream lifecycle, preserving cancellation, liveness checks,
-local tool calls, and token delivery to WebUI.
+WebUI uses the same Gateway runtime and model resolver as the CLI. Direct
+in-process `AIAgent` construction resolves the named provider's configured
+transport, so WebUI cannot silently fall back to `chat_completions` while
+retaining the same account name and base URL. No WebUI patch or second service
+is required. Streaming v4 SSE events are projected into Hermes' existing stream
+lifecycle, preserving cancellation, liveness checks, local tool calls, and
+token delivery to WebUI.
 
 ## Rollback
 

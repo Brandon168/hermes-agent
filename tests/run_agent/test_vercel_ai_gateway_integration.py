@@ -38,6 +38,69 @@ def _agent(*, enabled_toolsets: list[str]) -> AIAgent:
     )
 
 
+def test_direct_named_provider_resolves_configured_transport(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {
+            "providers": {
+                "vercel-vtest314": {
+                    "name": "vercel-vtest314",
+                    "api": "https://ai-gateway.vercel.sh/v1",
+                    "key_env": "VERCEL_VTEST314_API_KEY",
+                    "transport": "vercel_ai_gateway",
+                }
+            }
+        },
+    )
+    agent = AIAgent(
+        api_key="test-key",
+        base_url="https://ai-gateway.vercel.sh/v1",
+        model="openai/gpt-5.6-luna",
+        provider="vercel-vtest314",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=["web"],
+    )
+    try:
+        assert agent.api_mode == "vercel_ai_gateway"
+        assert isinstance(agent.client, VercelAIGatewayClient)
+    finally:
+        cast(VercelAIGatewayClient, agent.client).close()
+
+
+def test_explicit_api_mode_overrides_named_provider_transport(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "hermes_cli.config.load_config",
+        lambda: {
+            "providers": {
+                "vercel-vtest314": {
+                    "name": "vercel-vtest314",
+                    "api": "https://ai-gateway.vercel.sh/v1",
+                    "key_env": "VERCEL_VTEST314_API_KEY",
+                    "transport": "vercel_ai_gateway",
+                }
+            }
+        },
+    )
+    agent = AIAgent(
+        api_key="test-key",
+        base_url="https://example.test/v1",
+        model="example/model",
+        provider="vercel-vtest314",
+        api_mode="chat_completions",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+    )
+    try:
+        assert agent.api_mode == "chat_completions"
+        assert not isinstance(agent.client, VercelAIGatewayClient)
+    finally:
+        agent.client.close()
+
+
 def test_agent_initializes_native_client_and_builds_v4_request() -> None:
     agent = _agent(enabled_toolsets=["web"])
     try:
