@@ -1791,6 +1791,24 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
     if tools_for_api is None:
         tools_for_api = agent.tools
 
+    if agent.api_mode == "vercel_ai_gateway":
+        transport = agent._get_transport()
+        enabled_toolsets = getattr(agent, "enabled_toolsets", None)
+        disabled_toolsets = set(getattr(agent, "disabled_toolsets", None) or [])
+        native_search_enabled = "web" not in disabled_toolsets
+        if enabled_toolsets is not None:
+            native_search_enabled = native_search_enabled and "web" in set(enabled_toolsets)
+        return transport.build_kwargs(
+            model=agent.model,
+            messages=api_messages,
+            tools=tools_for_api,
+            max_tokens=agent.max_tokens,
+            reasoning_config=agent.reasoning_config,
+            request_overrides=agent.request_overrides,
+            timeout=agent._resolved_api_call_timeout(),
+            native_search_enabled=native_search_enabled,
+        )
+
     if agent.api_mode == "anthropic_messages":
         _transport = agent._get_transport()
         anthropic_messages = agent._prepare_anthropic_messages_for_api(api_messages)
@@ -3946,7 +3964,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                 accept_chunk=_accept_stream_chunk,
                 completed_response_predicate=lambda value: hasattr(value, "choices"),
                 metadata={
-                    "api_mode": "chat_completions",
+                    "api_mode": agent.api_mode,
                     "api_request_id": getattr(agent, "_current_api_request_id", None),
                     "call_role": (
                         "delegated"

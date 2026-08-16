@@ -397,6 +397,7 @@ _VALID_API_MODES = {
     "codex_responses",
     "anthropic_messages",
     "bedrock_converse",
+    "vercel_ai_gateway",
     # Optional opt-in: hand the entire turn to a `codex app-server` subprocess
     # so terminal/file-ops/patching/sandboxing run inside Codex's own runtime
     # instead of Hermes' tool dispatch. Gated behind config key

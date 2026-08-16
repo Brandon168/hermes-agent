@@ -2436,6 +2436,27 @@ def create_openai_client(agent, client_kwargs: dict, *, reason: str, shared: boo
                 agent._client_log_context(),
             )
             return client
+    if getattr(agent, "api_mode", "") == "vercel_ai_gateway":
+        from agent.vercel_ai_gateway_client import VercelAIGatewayClient
+
+        safe_kwargs = {
+            k: v for k, v in client_kwargs.items()
+            if k in {"api_key", "base_url", "default_headers", "timeout", "http_client"}
+        }
+        if "http_client" not in safe_kwargs:
+            keepalive_http = agent._build_keepalive_http_client(
+                str(client_kwargs.get("base_url", "") or ""), verify=httpx_verify,
+            )
+            if keepalive_http is not None:
+                safe_kwargs["http_client"] = keepalive_http
+        client = VercelAIGatewayClient(**safe_kwargs)
+        _ra().logger.info(
+            "Vercel AI Gateway v4 client created (%s, shared=%s) %s",
+            reason,
+            shared,
+            agent._client_log_context(),
+        )
+        return client
     # Inject TCP keepalives so the kernel detects dead provider connections
     # instead of letting them sit silently in CLOSE-WAIT (#10324).  Without
     # this, a peer that drops mid-stream leaves the socket in a state where
