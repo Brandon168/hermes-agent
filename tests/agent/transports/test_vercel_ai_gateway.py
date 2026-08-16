@@ -9,6 +9,8 @@ from agent.transports import get_transport
 from agent.transports.vercel_ai_gateway import (
     API_MODE,
     DEFAULT_SEARCH_CONFIG,
+    _NATIVE_SEARCH_SAFETY_INSTRUCTION,
+    _load_search_config,
     VercelAIGatewayTransport,
 )
 
@@ -22,9 +24,11 @@ def fixture() -> dict:
 
 @pytest.fixture
 def transport(monkeypatch) -> VercelAIGatewayTransport:
+    config = json.loads(json.dumps(DEFAULT_SEARCH_CONFIG))
+    config["enabled"] = True
     monkeypatch.setattr(
         "agent.transports.vercel_ai_gateway._load_search_config",
-        lambda: json.loads(json.dumps(DEFAULT_SEARCH_CONFIG)),
+        lambda: config,
     )
     return VercelAIGatewayTransport()
 
@@ -117,6 +121,48 @@ def test_native_search_injected_without_local_web_backend(transport) -> None:
             "args": DEFAULT_SEARCH_CONFIG["exa"],
         }
     ]
+
+
+def test_native_search_is_disabled_without_explicit_opt_in(monkeypatch) -> None:
+    monkeypatch.setattr("hermes_cli.config.load_config", lambda: {})
+    assert _load_search_config()["enabled"] is False
+    assert VercelAIGatewayTransport().convert_tools([]) == []
+
+
+def test_config_loader_failure_fails_closed(monkeypatch) -> None:
+    def fail():
+        raise RuntimeError("config unavailable")
+
+    monkeypatch.setattr("hermes_cli.config.load_config", fail)
+    config = _load_search_config()
+    assert config["enabled"] is False
+    assert config["zero_data_retention"] is True
+
+
+def test_provider_search_adds_untrusted_content_system_boundary(transport) -> None:
+    kwargs = transport.build_kwargs(
+        "openai/gpt-5.6-luna",
+        [{"role": "user", "content": "Search."}],
+        tools=[],
+    )
+    assert kwargs["prompt"][0] == {
+        "role": "system",
+        "content": _NATIVE_SEARCH_SAFETY_INSTRUCTION,
+    }
+
+
+def test_provider_search_appends_boundary_to_existing_system_message(transport) -> None:
+    kwargs = transport.build_kwargs(
+        "openai/gpt-5.6-luna",
+        [
+            {"role": "system", "content": "Be exact."},
+            {"role": "user", "content": "Search."},
+        ],
+        tools=[],
+    )
+    system = kwargs["prompt"][0]
+    assert system["content"].startswith("Be exact.\n\n")
+    assert system["content"].endswith(_NATIVE_SEARCH_SAFETY_INSTRUCTION)
 
 
 def test_web_toolset_opt_out_does_not_inject_search(transport) -> None:
