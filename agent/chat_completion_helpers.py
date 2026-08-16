@@ -1793,6 +1793,9 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
 
     if agent.api_mode == "vercel_ai_gateway":
         transport = agent._get_transport()
+        ephemeral_out = getattr(agent, "_ephemeral_max_output_tokens", None)
+        if ephemeral_out is not None:
+            agent._ephemeral_max_output_tokens = None  # consume immediately
         enabled_toolsets = getattr(agent, "enabled_toolsets", None)
         disabled_toolsets = set(getattr(agent, "disabled_toolsets", None) or [])
         native_search_enabled = "web" not in disabled_toolsets
@@ -1802,7 +1805,7 @@ def build_api_kwargs(agent, api_messages: list, tools_for_api: list | None = Non
             model=agent.model,
             messages=api_messages,
             tools=tools_for_api,
-            max_tokens=agent.max_tokens,
+            max_tokens=ephemeral_out if ephemeral_out is not None else agent.max_tokens,
             reasoning_config=agent.reasoning_config,
             request_overrides=agent.request_overrides,
             timeout=agent._resolved_api_call_timeout(),

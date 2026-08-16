@@ -47,6 +47,13 @@ session.
 - `web_extract` is withheld by default. Exa result content is available to the
   model, but the Gateway tool is not an arbitrary-URL fetch API.
 - Request-level Gateway ZDR is enabled by default.
+- Native search is fail-closed and requires `enabled: true`; missing, malformed,
+  or unreadable configuration does not activate a third-party search request.
+- Provider-native results are consumed inside the model request, so Hermes
+  cannot apply its post-retrieval `<untrusted_tool_result>` wrapper. Every
+  native-search request carries a system-level instruction to treat result
+  content as untrusted evidence, but this remains a weaker trust boundary than
+  a locally executed and wrapped `web_search` result.
 - Disabling the `web` toolset suppresses native search entirely.
 - The transport refuses non-Vercel hosts and unknown critical stream events.
 - Ambiguous HTTP failures are left to Hermes' outer retry/fallback policy; the

@@ -5,11 +5,23 @@ from pathlib import Path
 from typing import cast
 
 import httpx
+import pytest
 
+from agent.transports.vercel_ai_gateway import DEFAULT_SEARCH_CONFIG
 from agent.vercel_ai_gateway_client import VercelAIGatewayClient
 from run_agent import AIAgent
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "vercel_ai_gateway" / "sdk_oracle_v4.json"
+
+
+@pytest.fixture(autouse=True)
+def _enable_native_search(monkeypatch):
+    config = json.loads(json.dumps(DEFAULT_SEARCH_CONFIG))
+    config["enabled"] = True
+    monkeypatch.setattr(
+        "agent.transports.vercel_ai_gateway._load_search_config",
+        lambda: config,
+    )
 
 
 def _agent(*, enabled_toolsets: list[str]) -> AIAgent:
@@ -34,11 +46,27 @@ def test_agent_initializes_native_client_and_builds_v4_request() -> None:
         transport = agent._get_transport()
         assert transport is not None
         assert transport.api_mode == "vercel_ai_gateway"
-        assert kwargs["prompt"] == [
-            {"role": "user", "content": [{"type": "text", "text": "Search."}]}
-        ]
+        assert kwargs["prompt"][0]["role"] == "system"
+        assert "untrusted external data" in kwargs["prompt"][0]["content"]
+        assert kwargs["prompt"][1] == {
+            "role": "user",
+            "content": [{"type": "text", "text": "Search."}],
+        }
         assert kwargs["reasoning"] == "low"
         assert kwargs["tools"][-1]["id"] == "gateway.exa_search"
+    finally:
+        cast(VercelAIGatewayClient, agent.client).close()
+
+
+def test_agent_consumes_ephemeral_output_override_once() -> None:
+    agent = _agent(enabled_toolsets=["web"])
+    try:
+        setattr(agent, "_ephemeral_max_output_tokens", 1234)
+        first = agent._build_api_kwargs([{"role": "user", "content": "Search."}])
+        second = agent._build_api_kwargs([{"role": "user", "content": "Search."}])
+        assert first["maxOutputTokens"] == 1234
+        assert getattr(agent, "_ephemeral_max_output_tokens") is None
+        assert second.get("maxOutputTokens") != 1234
     finally:
         cast(VercelAIGatewayClient, agent.client).close()
 
