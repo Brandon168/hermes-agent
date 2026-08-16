@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "ai": "7.0.66",
+    "@ai-sdk/gateway": "4.0.52",
+    "@ai-sdk/provider": "4.0.7"
+  }
+}

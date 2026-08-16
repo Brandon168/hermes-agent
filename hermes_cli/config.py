@@ -1304,6 +1304,8 @@ _API_MODE_ALIASES = {
     "messages": "anthropic_messages",
     "bedrock": "bedrock_converse",
     "bedrock-converse": "bedrock_converse",
+    "vercel-v4": "vercel_ai_gateway",
+    "vercel-ai-gateway": "vercel_ai_gateway",
 }
 
 
